@@ -1,0 +1,119 @@
+====================================================================
+CODIGO VBA - MACRO "Get_Data_From_File" + "MarkDuplicates"
+====================================================================
+
+INSTRUCCIONES PARA INSTALARLO:
+1. Abre el archivo CREATION_CASE_MACRO_TEMPLATE.xlsm
+2. Presiona ALT + F11 para abrir el editor de VBA
+3. En el panel izquierdo (Project Explorer), busca la hoja "Sheet1"
+   (que corresponde al tab donde vive el boton/macro original)
+4. Haz doble clic sobre "Sheet1" para abrir su modulo de codigo
+5. Borra el codigo que tenga ahi (si es el macro viejo) y pega TODO
+   el codigo de abajo (incluye las dos Sub completas)
+6. Guarda el archivo como .xlsm (Ctrl+S), manteniendo el formato
+   "Excel Macro-Enabled Workbook"
+7. Si te sale advertencia de seguridad de macros al abrir el archivo,
+   dale click en "Habilitar contenido" / "Enable Content"
+
+Nota: si tu computadora de trabajo tiene bloqueadas las macros por
+politica de IT, este codigo no va a poder ejecutarse sin importar
+donde lo pegues. En ese caso pide a tu equipo de IT que habilite
+macros para este archivo, o usa la version con formulas (que no
+depende de macros) que te compartI antes.
+
+====================================================================
+CODIGO COMPLETO
+====================================================================
+
+Sub Get_Data_From_File()
+
+Dim FileToOpen As Variant
+Dim Openbook As Workbook
+Application.ScreenUpdating = False
+
+FileToOpen = Application.GetOpenFilename(Title:="Browse for your File and Import Range", FileFilter:="Excel Files (*.xls*),*xls*")
+If FileToOpen <> False Then
+    Set Openbook = Application.Workbooks.Open(FileToOpen)
+    Openbook.Sheets(1).Range("A:DE").Copy
+    ThisWorkbook.Worksheets("Raw Data").Range("A1").PasteSpecial xlPasteValues
+    Openbook.Close False
+
+    Call MarkDuplicates
+
+End If
+
+Application.ScreenUpdating = True
+
+End Sub
+
+
+Sub MarkDuplicates()
+' Marca "Duplicate" en la columna CK ("Duplicate") de la hoja "Raw Data"
+' cuando el Evaluation ID (columna B) o el Location ID (columna K)
+' se repiten en mas de una fila.
+
+Dim ws As Worksheet
+Dim lastRow As Long
+Dim i As Long
+Dim evalDict As Object, locDict As Object
+Dim evalKey As String, locKey As String
+
+Set ws = ThisWorkbook.Worksheets("Raw Data")
+Set evalDict = CreateObject("Scripting.Dictionary")
+Set locDict = CreateObject("Scripting.Dictionary")
+
+lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+If lastRow < 2 Then Exit Sub
+
+' Primera pasada: contar cuantas veces aparece cada ID
+For i = 2 To lastRow
+    evalKey = Trim(CStr(ws.Cells(i, "B").Value))
+    locKey = Trim(CStr(ws.Cells(i, "K").Value))
+
+    If evalKey <> "" Then
+        If evalDict.exists(evalKey) Then
+            evalDict(evalKey) = evalDict(evalKey) + 1
+        Else
+            evalDict.Add evalKey, 1
+        End If
+    End If
+
+    If locKey <> "" Then
+        If locDict.exists(locKey) Then
+            locDict(locKey) = locDict(locKey) + 1
+        Else
+            locDict.Add locKey, 1
+        End If
+    End If
+Next i
+
+' Segunda pasada: marcar como "Duplicate" las filas que se repiten
+For i = 2 To lastRow
+    evalKey = Trim(CStr(ws.Cells(i, "B").Value))
+    locKey = Trim(CStr(ws.Cells(i, "K").Value))
+
+    If (evalKey <> "" And evalDict(evalKey) > 1) Or (locKey <> "" And locDict(locKey) > 1) Then
+        ws.Cells(i, "CK").Value = "Duplicate"
+    Else
+        ws.Cells(i, "CK").Value = ""
+    End If
+Next i
+
+End Sub
+
+====================================================================
+QUE HACE CADA PARTE
+====================================================================
+
+- Get_Data_From_File: abre el archivo que selecciones, copia el rango
+  A:DE de la primera hoja de ese archivo, y lo pega como VALORES en
+  la hoja "Raw Data" empezando en A1. Al final llama a MarkDuplicates.
+
+- MarkDuplicates: recorre todas las filas de "Raw Data" y escribe la
+  palabra "Duplicate" en la columna CK cuando el Evaluation ID
+  (columna B) o el Location ID (columna K) aparecen mas de una vez
+  en toda la hoja. Si no se repiten, deja la celda vacia.
+
+Si quieres correr MarkDuplicates de forma independiente (sin volver
+a importar el archivo), puedes ejecutarla sola desde ALT+F8 >
+seleccionas "MarkDuplicates" > Ejecutar.
